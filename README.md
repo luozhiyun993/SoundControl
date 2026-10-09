@@ -31,9 +31,22 @@ macOS has a single system volume for everything. SoundControl lets you turn Chro
 ## Requirements
 
 - macOS 14.2 or later (uses Core Audio Process Taps)
-- Xcode Command Line Tools (`xcode-select --install`). **Full Xcode is not required.**
+- Apple silicon or Intel Mac
 
-## Installation
+## Download
+
+Download the latest `SoundControl-x.y.z.dmg` from [Releases](https://github.com/luozhiyun993/SoundControl/releases/latest), open it, and drag **SoundControl** into **Applications**.
+
+SoundControl is self-signed and not notarized by Apple, so the first launch is blocked with a message that the developer can't be verified. To allow it, either:
+
+- Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to SoundControl, or
+- Run `xattr -dr com.apple.quarantine /Applications/SoundControl.app` in Terminal
+
+The first time an app is taken over, macOS asks for **System Audio Recording** permission. Allow it.
+
+## Build from source
+
+Requires Xcode Command Line Tools (`xcode-select --install`). **Full Xcode is not required.**
 
 ```bash
 git clone https://github.com/luozhiyun993/SoundControl.git
@@ -78,6 +91,7 @@ Because the audio still goes through the output device, app volume can only be a
 
 ```bash
 ./scripts/build-app.sh && open build/SoundControl.app   # build and bundle only, don't install
+./scripts/make-dmg.sh                                     # package build/SoundControl-<version>.dmg
 swift scripts/make-icon.swift Resources/AppIcon.png       # regenerate the app icon
 ```
 

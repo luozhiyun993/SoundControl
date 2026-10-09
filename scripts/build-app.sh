@@ -7,12 +7,17 @@ CERT_NAME="SoundControl Dev"
 APP="$ROOT/build/SoundControl.app"
 
 cd "$ROOT"
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/SoundControl"
+# 分别编译 Apple 芯片与 Intel 版本，合并为通用二进制。
+BINS=()
+for arch in arm64 x86_64; do
+    triple="$arch-apple-macosx14.2"
+    swift build -c release --triple "$triple"
+    BINS+=("$(swift build -c release --triple "$triple" --show-bin-path)/SoundControl")
+done
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/SoundControl"
+lipo -create "${BINS[@]}" -output "$APP/Contents/MacOS/SoundControl"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
 # 由 Resources/AppIcon.png（scripts/make-icon.swift 生成）制作 .icns。

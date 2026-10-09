@@ -31,9 +31,22 @@ macOS 只有一个统一的系统音量。SoundControl 让你把 Chrome 调到 3
 ## 系统要求
 
 - macOS 14.2 或更高版本（依赖 Core Audio Process Tap）
-- Xcode Command Line Tools（`xcode-select --install`），**不需要安装 Xcode**
+- Apple 芯片或 Intel 芯片的 Mac
 
-## 安装
+## 下载安装
+
+从 [Releases](https://github.com/luozhiyun993/SoundControl/releases/latest) 下载最新的 `SoundControl-x.y.z.dmg`，打开后把 **SoundControl** 拖进 **应用程序** 文件夹。
+
+SoundControl 使用自签名证书，没有经过 Apple 公证，所以第一次打开会提示"无法验证开发者"。放行方法二选一：
+
+- 打开 **系统设置 → 隐私与安全性**，滚动到底部，点击 SoundControl 旁边的 **仍要打开**
+- 或在终端运行 `xattr -dr com.apple.quarantine /Applications/SoundControl.app`
+
+第一次接管应用时，系统会请求 **系统音频录制** 权限，请允许。
+
+## 从源码编译
+
+需要 Xcode Command Line Tools（`xcode-select --install`），**不需要安装 Xcode**。
 
 ```bash
 git clone https://github.com/luozhiyun993/SoundControl.git
@@ -78,6 +91,7 @@ SoundControl 使用 macOS 14.2 引入的 [Core Audio Process Tap](https://develo
 
 ```bash
 ./scripts/build-app.sh && open build/SoundControl.app   # 只编译打包，不安装
+./scripts/make-dmg.sh                                     # 打包 build/SoundControl-<版本>.dmg
 swift scripts/make-icon.swift Resources/AppIcon.png       # 重新生成图标
 ```
 
