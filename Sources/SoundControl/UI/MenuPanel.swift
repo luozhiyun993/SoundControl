@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// 面板各列宽度。系统音量行与受控应用行共用，使滑块和百分比上下对齐。
+private enum Column {
+    static let icon: CGFloat = 20
+    static let name: CGFloat = 110
+    static let mute: CGFloat = 18
+    static let value: CGFloat = 40
+    static let remove: CGFloat = 16
+}
+
 /// 菜单栏弹出面板。
 struct MenuPanel: View {
     @ObservedObject var controller: SoundController
@@ -59,7 +68,7 @@ struct MenuPanel: View {
             }
         }
         .padding(16)
-        .frame(width: 340)
+        .frame(width: 380)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             controller.refreshPermission()
         }
@@ -68,8 +77,9 @@ struct MenuPanel: View {
     private var systemVolumeRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "speaker.wave.3.fill").frame(width: 20)
-                Text("系统音量").frame(width: 70, alignment: .leading)
+                Image(systemName: "speaker.wave.3.fill").frame(width: Column.icon)
+                Text("系统音量").frame(width: Column.name, alignment: .leading)
+                Color.clear.frame(width: Column.mute, height: 1)
                 Slider(value: Binding(
                     get: { Double(systemVolume.volume) },
                     set: { systemVolume.set(Float($0)) }
@@ -77,7 +87,8 @@ struct MenuPanel: View {
                 .disabled(!systemVolume.isAdjustable)
                 Text(systemVolume.isAdjustable ? "\(Int((systemVolume.volume * 100).rounded()))%" : "—")
                     .monospacedDigit()
-                    .frame(width: 40, alignment: .trailing)
+                    .frame(width: Column.value, alignment: .trailing)
+                Color.clear.frame(width: Column.remove, height: 1)
             }
             if !systemVolume.isAdjustable {
                 Text("此设备不支持调节系统音量").font(.caption).foregroundStyle(.secondary)
@@ -106,11 +117,11 @@ private struct AppRow: View {
 
     var body: some View {
         HStack {
-            Image(nsImage: app.icon).resizable().frame(width: 20, height: 20)
-            Text(app.name).lineLimit(1).frame(width: 70, alignment: .leading)
+            Image(nsImage: app.icon).resizable().frame(width: Column.icon, height: Column.icon)
+            Text(app.name).lineLimit(1).truncationMode(.middle).frame(width: Column.name, alignment: .leading)
             Button { controller.toggleMute(app) } label: {
                 Image(systemName: app.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .frame(width: 18)
+                    .frame(width: Column.mute)
             }
             .buttonStyle(.borderless)
             .help(app.isMuted ? "取消静音" : "静音")
@@ -120,9 +131,10 @@ private struct AppRow: View {
             ), in: 0...1)
             Text("\(Int((app.volume * 100).rounded()))%")
                 .monospacedDigit()
-                .frame(width: 40, alignment: .trailing)
+                .frame(width: Column.value, alignment: .trailing)
             Button { controller.remove(app) } label: {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    .frame(width: Column.remove)
             }
             .buttonStyle(.borderless)
             .help("移除")
