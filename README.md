@@ -1,99 +1,101 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" width="128" alt="SoundControl 图标">
+  <img src="Resources/AppIcon.png" width="128" alt="SoundControl icon">
 </p>
 
 <h1 align="center">SoundControl</h1>
 
-<p align="center">常驻 macOS 菜单栏，为每个应用单独设置音量。</p>
+<p align="center">Per-app volume control, right in the macOS menu bar.</p>
+
+<p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
 ---
 
-macOS 只有一个统一的系统音量。SoundControl 让你把 Chrome 调到 30%、QQ音乐 保持 100%、微信提示音照旧——每个应用一条滑块，互不影响。
+macOS has a single system volume for everything. SoundControl lets you turn Chrome down to 30%, keep your music player at 100%, and leave notification sounds alone — one slider per app, each independent of the others.
 
-## 功能
+## Features
 
-- **按应用调音量**：每个受控应用一条滑块（0–100%），并带独立的静音开关
-- **随意添加**：从"正在发声"的应用中选，或从"应用程序"文件夹里预先添加未运行的应用
-- **系统音量**：面板顶部直接调节当前输出设备的音量
-- **自动跟随**：切换输出设备（扬声器 / AirPods / 显示器）后设置照常生效；应用重启后自动重新接管
-- **只碰你添加的应用**：未添加的应用完全不受影响
-- **开机自启动**
-- 支持 Chrome、Safari 这类由多个辅助进程发声的应用
+- **Per-app volume**: a slider (0–100%) and an independent mute toggle for every controlled app
+- **Add any app**: pick from apps that are currently playing audio, or add apps from the Applications folder in advance, even if they're not running
+- **System volume**: adjust the current output device's volume from the top of the panel
+- **Follows your setup**: settings keep working when you switch output devices (speakers / AirPods / displays), and apps are picked up again automatically when relaunched
+- **Hands off everything else**: apps you haven't added are never touched
+- **Launch at login**
+- Works with apps that play audio from helper processes, such as Chrome and Safari
 
-> **应用音量是相对值**：实际响度 = 系统音量 × 应用音量。系统音量 50%、某应用设为 50%，听到的就是 25%。
+> **App volume is relative**: actual loudness = system volume × app volume. With the system at 50% and an app at 50%, you hear that app at 25%.
 
-## 系统要求
+## Requirements
 
-- macOS 14.2 或更高版本（依赖 Core Audio Process Tap）
-- Xcode Command Line Tools（`xcode-select --install`），**不需要安装 Xcode**
+- macOS 14.2 or later (uses Core Audio Process Taps)
+- Xcode Command Line Tools (`xcode-select --install`). **Full Xcode is not required.**
 
-## 安装
+## Installation
 
 ```bash
 git clone https://github.com/luozhiyun993/SoundControl.git
 cd SoundControl
 
-# 1. 创建本地自签名代码签名证书（只需一次）
+# 1. Create a local self-signed code-signing certificate (one time only)
 ./scripts/create-signing-cert.sh
 
-# 2. 编译并安装到 ~/Applications，然后启动
+# 2. Build, install to ~/Applications, and launch
 ./scripts/install.sh
 ```
 
-第一次签名时，钥匙串会询问是否允许 `codesign` 使用证书私钥，输入登录密码并点 **始终允许**。
+The first time you sign, Keychain asks whether `codesign` may use the certificate's private key. Enter your login password and click **Always Allow**.
 
-第一次接管应用时，系统会请求 **系统音频录制** 权限，请允许。如果误点了拒绝，可以在面板里点"打开系统设置"重新授权。
+The first time an app is taken over, macOS asks for **System Audio Recording** permission. Allow it. If you denied it by mistake, click "Open System Settings" in the panel to grant it.
 
-> 为什么需要证书？如果用临时签名，每次重新编译后 macOS 都会把它当成新的 App，要求重新授权。
+> Why a certificate? With ad-hoc signing, macOS treats every rebuild as a new app and asks for permission again.
 
-## 使用
+## Usage
 
-1. 点击菜单栏的喇叭图标打开面板
-2. 点右上角 **＋**，选择正在发声的应用，或"从应用程序文件夹选择…"
-3. 拖动滑块调节音量，点小喇叭图标静音，点 ⓧ 移除（移除后立即恢复原样）
+1. Click the speaker icon in the menu bar to open the panel
+2. Click **＋** in the top-right corner and choose an app that's playing audio, or choose one from the Applications folder
+3. Drag a slider to change that app's volume, click its speaker icon to mute it, or click ⓧ to remove it (its original volume comes back right away)
 
-## 工作原理
+## How it works
 
-SoundControl 使用 macOS 14.2 引入的 [Core Audio Process Tap](https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps)：
+SoundControl uses [Core Audio Process Taps](https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps), introduced in macOS 14.2:
 
-1. 找到受控应用的所有音频进程（包括 Chrome Helper、Safari 的 WebKit.GPU 等辅助进程）
-2. 为它们创建一个 Process Tap，并让原声静音（`mutedWhenTapped`）
-3. 把截获的音频乘以应用音量，经过一个私有聚合设备输出到当前默认输出设备
+1. Find all audio processes that belong to a controlled app, including helpers such as Chrome Helper and Safari's WebKit.GPU process
+2. Create a process tap for them and mute the original output (`mutedWhenTapped`)
+3. Multiply the tapped audio by the app volume and play it through a private aggregate device on the current default output device
 
-由于声音最终仍经过输出设备，应用音量只能是系统音量的一个比例。App 退出或崩溃时截获自动失效，各应用立刻恢复原始音量。
+Because the audio still goes through the output device, app volume can only be a fraction of the system volume. If SoundControl quits or crashes, the taps go away and every app goes back to its original volume.
 
-## 开发
+## Development
 
 ```bash
-./scripts/build-app.sh && open build/SoundControl.app   # 只编译打包，不安装
-swift scripts/make-icon.swift Resources/AppIcon.png       # 重新生成图标
+./scripts/build-app.sh && open build/SoundControl.app   # build and bundle only, don't install
+swift scripts/make-icon.swift Resources/AppIcon.png       # regenerate the app icon
 ```
 
-项目不使用 Xcode 工程，由 Swift Package Manager 编译、脚本打包成 `.app`。
+There is no Xcode project. Swift Package Manager does the build, and the scripts bundle the result into a `.app`.
 
 ```
 Sources/SoundControl/
-├── Audio/                     # Core Audio 相关
-│   ├── AppVolumeTap.swift     # 截获一组进程并按增益重新输出
-│   ├── AudioProcess.swift     # 枚举音频进程，归属到所属应用
-│   ├── SystemVolume.swift     # 读写默认输出设备的音量
+├── Audio/                     # Core Audio
+│   ├── AppVolumeTap.swift     # Taps a set of processes and replays them with gain
+│   ├── AudioProcess.swift     # Lists audio processes and works out which app they belong to
+│   ├── SystemVolume.swift     # Reads and writes the default output device's volume
 │   ├── AudioCapturePermission.swift
 │   └── CoreAudioHelpers.swift
 ├── Model/
-│   ├── ControlledApp.swift    # 受控应用及其持久化
-│   └── SoundController.swift  # 维护受控应用与 Process Tap 的对应关系
+│   ├── ControlledApp.swift    # A controlled app, plus saving and loading the list
+│   └── SoundController.swift  # Keeps one process tap per running controlled app
 └── UI/
-    ├── SoundControlApp.swift  # 菜单栏入口
-    ├── MenuPanel.swift        # 弹出面板
-    └── AddAppMenu.swift       # "＋"菜单
+    ├── SoundControlApp.swift  # Menu bar entry point
+    ├── MenuPanel.swift        # The popup panel
+    └── AddAppMenu.swift       # The "＋" menu
 ```
 
-- [`CONTEXT.md`](CONTEXT.md)：项目术语表（受控应用、应用音量……）
-- [`docs/adr/`](docs/adr/)：架构决策记录
+- [`CONTEXT.md`](CONTEXT.md): project glossary (in Chinese)
+- [`docs/adr/`](docs/adr/): architecture decision records (in Chinese)
 
-## 已知限制
+## Known limitations
 
-- 只做按应用控制，无法区分 Chrome 的不同标签页
-- 不支持超过 100% 的放大
-- 截获音频按 Float32 立体声处理，少数特殊输出设备可能表现异常
-- 权限查询和"负责进程"归属用到了系统私有接口，未来系统更新可能需要调整
+- Control is per app; individual Chrome tabs can't be controlled separately
+- No boost above 100%
+- Tapped audio is assumed to be stereo Float32, so a few unusual output devices may not work correctly
+- Checking the audio-recording permission and finding which app a helper process belongs to both rely on private system APIs, which may need updating after future macOS releases
