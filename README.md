@@ -12,6 +12,10 @@
 
 macOS has a single system volume for everything. SoundControl lets you turn Chrome down to 30%, keep your music player at 100%, and leave notification sounds alone — one slider per app, each independent of the others.
 
+<p align="center">
+  <img src="docs/images/panel.png" width="540" alt="SoundControl menu bar panel">
+</p>
+
 ## Features
 
 - **Per-app volume**: a slider (0–100%) and an independent mute toggle for every controlled app
@@ -50,9 +54,15 @@ The first time an app is taken over, macOS asks for **System Audio Recording** p
 
 ## Usage
 
-1. Click the speaker icon in the menu bar to open the panel
-2. Click **＋** in the top-right corner and choose an app that's playing audio, or choose one from the Applications folder
-3. Drag a slider to change that app's volume, click its speaker icon to mute it, or click ⓧ to remove it (its original volume comes back right away)
+1. **Open the panel**: click the speaker icon in the menu bar.
+2. **Add an app**: click **＋** in the top-right corner. The menu lists apps that are playing audio right now; click one to add it. To add an app that isn't running yet, choose "从应用程序文件夹选择…" (Choose from Applications folder…).
+3. **Adjust**:
+   - Drag the **system volume** slider at the top to change the output device's volume.
+   - Drag an app's slider to set its volume relative to the system volume.
+   - Click the small speaker icon to mute or unmute an app; its slider position is kept.
+   - Click ⓧ to remove an app. Its original volume comes back right away.
+4. **Apps that aren't running** are shown dimmed (like QQ音乐 in the screenshot). You can still adjust them, and the setting applies as soon as the app starts playing.
+5. **Launch at login**: tick the checkbox at the bottom of the panel.
 
 ## How it works
 
