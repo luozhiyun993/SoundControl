@@ -16,6 +16,7 @@ final class SoundController: ObservableObject {
     private var taps: [String: AppVolumeTap] = [:]
     private var isRequestingPermission = false
     private var removeListeners: [() -> Void] = []
+    private var outputListeners: [AudioObjectID: () -> Void] = [:]
 
     init() {
         systemVolume.rebind()
@@ -119,13 +120,23 @@ final class SoundController: ObservableObject {
     // MARK: - 截获
 
     /// 让 taps 与"受控且正在发声的应用"保持一致。进程集合没变的 tap 保持不动，避免声音中断。
+    ///
+    /// 只截获已经在输出的进程：在进程初始化音频时就截获它，会让它的输出启动不起来
+    /// （例如飞书入会时新起的 com.electron.lark.iron 进程会一直无声）。
+    /// 已截获的进程即使暂停输出也继续保留，避免反复重建。
     private func syncTaps(restartAll: Bool = false) {
         if restartAll { stopAllTaps() }
 
         let processes = AudioProcess.all()
+        watchOutputState(of: processes.filter { process in apps.contains { process.belongs(to: $0.bundleID) } })
+
         var wanted: [String: [AudioObjectID]] = [:]
         for app in apps {
-            let ids = processes.filter { $0.belongs(to: app.bundleID) }.map(\.objectID).sorted()
+            let tapped = Set(taps[app.bundleID]?.processes ?? [])
+            let ids = processes
+                .filter { $0.belongs(to: app.bundleID) && ($0.isRunningOutput || tapped.contains($0.objectID)) }
+                .map(\.objectID)
+                .sorted()
             if !ids.isEmpty { wanted[app.bundleID] = ids }
         }
 
@@ -159,6 +170,20 @@ final class SoundController: ObservableObject {
                 taps[app.bundleID] = tap
             } catch {
                 lastError = "接管 \(app.name) 失败：\(error)"
+            }
+        }
+    }
+
+    /// 受控应用的进程开始或停止输出时重新同步，只为这些进程保留监听。
+    private func watchOutputState(of processes: [AudioProcess]) {
+        let ids = Set(processes.map(\.objectID))
+        for (id, remove) in outputListeners where !ids.contains(id) {
+            remove()
+            outputListeners[id] = nil
+        }
+        for process in processes where outputListeners[process.objectID] == nil {
+            outputListeners[process.objectID] = addListener(process.objectID, kAudioProcessPropertyIsRunningOutput) { [weak self] in
+                self?.syncTaps()
             }
         }
     }
