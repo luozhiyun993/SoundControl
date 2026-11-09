@@ -125,6 +125,9 @@ final class SoundController: ObservableObject {
     /// （例如飞书入会时新起的 com.electron.lark.iron 进程会一直无声）。
     /// 已截获的进程即使暂停输出也继续保留，避免反复重建。
     private func syncTaps(restartAll: Bool = false) {
+        // 重建前记下已截获的进程：切换输出设备时应用正在重启输出，IsRunningOutput 会短暂为 0，
+        // 而且恢复输出时不一定会再收到通知，所以不能按此刻的状态决定是否继续截获它们。
+        let previouslyTapped = taps.mapValues { Set($0.processes) }
         if restartAll { stopAllTaps() }
 
         let processes = AudioProcess.all()
@@ -132,7 +135,7 @@ final class SoundController: ObservableObject {
 
         var wanted: [String: [AudioObjectID]] = [:]
         for app in apps {
-            let tapped = Set(taps[app.bundleID]?.processes ?? [])
+            let tapped = previouslyTapped[app.bundleID] ?? []
             let ids = processes
                 .filter { $0.belongs(to: app.bundleID) && ($0.isRunningOutput || tapped.contains($0.objectID)) }
                 .map(\.objectID)
