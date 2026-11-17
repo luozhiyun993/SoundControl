@@ -17,6 +17,11 @@ final class SoundController: ObservableObject {
     private var isRequestingPermission = false
     private var removeListeners: [() -> Void] = []
     private var outputListeners: [AudioObjectID: () -> Void] = [:]
+    private var healthTimer: Timer?
+    /// 每个受控应用判定截获失效前允许的静音时长（秒）。重建后仍静音说明多半是应用在输出静音，逐步拉长以免反复重建。
+    private var silenceLimits: [String: Double] = [:]
+    private static let minSilenceLimit: Double = 2
+    private static let maxSilenceLimit: Double = 60
 
     init() {
         systemVolume.rebind()
@@ -38,6 +43,10 @@ final class SoundController: ObservableObject {
         }
 
         syncTaps()
+
+        healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.restartStaleTaps() }
+        }
     }
 
     // MARK: - 受控应用
@@ -189,6 +198,33 @@ final class SoundController: ObservableObject {
                 self?.syncTaps()
             }
         }
+    }
+
+    /// 重建失效的截获：被截获的进程正在输出，tap 却持续收不到任何声音。
+    /// 耳机断开重连等情况下应用会重建输出，旧 tap 随之失效但进程不变，其他通知都发现不了，
+    /// 此时原声也不再被静音，应用会以原音量直接出声。
+    private func restartStaleTaps() {
+        let now = DispatchTime.now().uptimeNanoseconds
+        var restarted = false
+        for (bundleID, tap) in taps {
+            let lastHeard = tap.signal.lastHeard
+            if lastHeard != 0, now < lastHeard + 2_000_000_000 {
+                silenceLimits[bundleID] = nil   // 刚截获到声音，tap 正常
+                continue
+            }
+            let silence = Double(now - max(lastHeard, tap.createdAt)) / 1e9
+            let limit = silenceLimits[bundleID] ?? Self.minSilenceLimit
+            guard silence >= limit, tap.processes.contains(where: isRunningOutput) else { continue }
+            silenceLimits[bundleID] = min(limit * 2, Self.maxSilenceLimit)
+            tap.stop()
+            taps[bundleID] = nil
+            restarted = true
+        }
+        if restarted { syncTaps() }
+    }
+
+    private func isRunningOutput(_ process: AudioObjectID) -> Bool {
+        ((try? readProperty(process, kAudioProcessPropertyIsRunningOutput, default: UInt32(0))) ?? 0) != 0
     }
 
     private func stopAllTaps() {
