@@ -1,6 +1,10 @@
 import AppKit
 import CoreAudio
+import OSLog
 import ServiceManagement
+
+/// 查看：log stream --level info --predicate 'subsystem == "local.soundcontrol.SoundControl"'
+let log = Logger(subsystem: "local.soundcontrol.SoundControl", category: "taps")
 
 /// 管理受控应用列表，并让每个正在运行的受控应用都有一个对应的 AppVolumeTap。
 @MainActor
@@ -28,9 +32,11 @@ final class SoundController: ObservableObject {
         refreshRunningApps()
 
         removeListeners.append(addListener(systemObject, kAudioHardwarePropertyProcessObjectList) { [weak self] in
+            log.info("进程列表变化")
             self?.syncTaps()
         })
         removeListeners.append(addListener(systemObject, kAudioHardwarePropertyDefaultOutputDevice) { [weak self] in
+            log.info("默认输出设备变化")
             self?.systemVolume.rebind()
             self?.syncTaps(restartAll: true)
         })
@@ -45,7 +51,7 @@ final class SoundController: ObservableObject {
         syncTaps()
 
         healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.restartStaleTaps() }
+            MainActor.assumeIsolated { self?.checkTaps() }
         }
     }
 
@@ -153,6 +159,7 @@ final class SoundController: ObservableObject {
         }
 
         for (bundleID, tap) in taps where wanted[bundleID] != tap.processes {
+            log.info("停止截获 \(bundleID, privacy: .public) \(tap.processes, privacy: .public)")
             tap.stop()
             taps[bundleID] = nil
         }
@@ -180,7 +187,9 @@ final class SoundController: ObservableObject {
             do {
                 try tap.start(outputUID: outputUID)
                 taps[app.bundleID] = tap
+                log.info("截获 \(app.bundleID, privacy: .public) \(ids, privacy: .public) -> \(outputUID, privacy: .public)")
             } catch {
+                log.error("截获 \(app.bundleID, privacy: .public) 失败：\(String(describing: error), privacy: .public)")
                 lastError = "接管 \(app.name) 失败：\(error)"
             }
         }
@@ -194,16 +203,27 @@ final class SoundController: ObservableObject {
             outputListeners[id] = nil
         }
         for process in processes where outputListeners[process.objectID] == nil {
-            outputListeners[process.objectID] = addListener(process.objectID, kAudioProcessPropertyIsRunningOutput) { [weak self] in
-                self?.syncTaps()
+            let id = process.objectID, bundleID = process.bundleID
+            outputListeners[id] = addListener(id, kAudioProcessPropertyIsRunningOutput) { [weak self] in
+                guard let self else { return }
+                log.info("\(bundleID, privacy: .public)(\(id)) 输出状态 -> \(self.isRunningOutput(id))")
+                syncTaps()
             }
         }
     }
 
-    /// 重建失效的截获：被截获的进程正在输出，tap 却持续收不到任何声音。
-    /// 耳机断开重连等情况下应用会重建输出，旧 tap 随之失效但进程不变，其他通知都发现不了，
-    /// 此时原声也不再被静音，应用会以原音量直接出声。
-    private func restartStaleTaps() {
+    /// 每秒兜底检查一次，补上 HAL 漏发或无从通知的情况：
+    /// - 受控应用的进程已在输出却没被截获：IsRunningOutput 的变化通知并不总会送达。
+    /// - 截获失效：被截获的进程正在输出，tap 却持续收不到任何声音。耳机断开重连等情况下应用会重建输出，
+    ///   旧 tap 随之失效但进程不变，此时原声也不再被静音，应用会以原音量直接出声。
+    private func checkTaps() {
+        let tapped = Set(taps.values.flatMap(\.processes))
+        if permission == .authorized,
+           let missed = outputListeners.keys.first(where: { !tapped.contains($0) && isRunningOutput($0) }) {
+            log.info("进程 \(missed) 在输出却未截获，重新同步")
+            syncTaps()
+        }
+
         let now = DispatchTime.now().uptimeNanoseconds
         var restarted = false
         for (bundleID, tap) in taps {
@@ -216,6 +236,7 @@ final class SoundController: ObservableObject {
             let limit = silenceLimits[bundleID] ?? Self.minSilenceLimit
             guard silence >= limit, tap.processes.contains(where: isRunningOutput) else { continue }
             silenceLimits[bundleID] = min(limit * 2, Self.maxSilenceLimit)
+            log.info("截获失效（\(Int(silence)) 秒无声）\(bundleID, privacy: .public) \(tap.processes, privacy: .public)，重建")
             tap.stop()
             taps[bundleID] = nil
             restarted = true
