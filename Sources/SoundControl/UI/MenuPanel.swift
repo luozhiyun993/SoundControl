@@ -79,7 +79,13 @@ struct MenuPanel: View {
             HStack {
                 Image(systemName: "speaker.wave.3.fill").frame(width: Column.icon)
                 Text("系统音量").frame(width: Column.name, alignment: .leading)
-                Color.clear.frame(width: Column.mute, height: 1)
+                Button { systemVolume.toggleMute() } label: {
+                    Image(systemName: systemVolume.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .frame(width: Column.mute)
+                }
+                .buttonStyle(.borderless)
+                .disabled(!systemVolume.isMutable)
+                .help(systemVolume.isMuted ? "取消静音" : "静音")
                 Slider(value: Binding(
                     get: { Double(systemVolume.volume) },
                     set: { systemVolume.set(Float($0)) }
@@ -87,6 +93,7 @@ struct MenuPanel: View {
                 .disabled(!systemVolume.isAdjustable)
                 Text(systemVolume.isAdjustable ? "\(Int((systemVolume.volume * 100).rounded()))%" : "—")
                     .monospacedDigit()
+                    .foregroundStyle(systemVolume.isMuted ? .secondary : .primary)
                     .frame(width: Column.value, alignment: .trailing)
                 Color.clear.frame(width: Column.remove, height: 1)
             }
